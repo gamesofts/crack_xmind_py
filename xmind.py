@@ -1,6 +1,8 @@
 import os
 import pathlib
 import shutil
+import tempfile
+import platform
 from abc import ABCMeta
 from abc import abstractmethod
 from base64 import b64encode, b64decode
@@ -38,10 +40,18 @@ class KeyGen(metaclass=ABCMeta):
 class XmindKeyGen(KeyGen):
 
     def __init__(self):
-        tmp_path = os.environ['TMP']
-        # asar_path = pathlib.Path(tmp_path).parent.joinpath(r'Programs\Xmind\resources')
-        # 自行修改路径
-        asar_path = pathlib.Path(r'C:\Users\whoami\AppData\Local\Programs\Xmind\resources')
+        tmp_path = tempfile.gettempdir()
+
+        os_type = platform.system()
+        if os_type == "Windows":
+            asar_path = pathlib.Path(r'C:\Users\whoami\AppData\Local\Programs\Xmind\resources')
+        elif os_type == "Linux":
+            asar_path = pathlib.Path(r'/opt/Xmind/resources')
+        elif os_type == "Darwin":
+            asar_path = pathlib.Path(r'/Applications/Xmind.app/Contents/Resources/')
+        else:
+            raise OSError(f"不支持的操作系统: {os_type}")
+
         self.asar_file = asar_path.joinpath('app.asar')
         self.asar_file_bak = asar_path.joinpath('app.asar.bak')
         self.crack_asar_dir = asar_path.joinpath('ext')
@@ -74,11 +84,10 @@ class XmindKeyGen(KeyGen):
         extract_asar(str(self.asar_file), str(self.crack_asar_dir))
         shutil.copytree('crack', self.main_dir, dirs_exist_ok=True)
         # 注入
-        with open(self.main_dir.joinpath('main.js'), 'rb') as f:
-            lines = f.readlines()
-            lines[5] = b'require("./hook")\n'
-        with open(self.main_dir.joinpath('main.js'), 'wb') as f:
-            f.writelines(lines)
+
+        with open(self.main_dir.joinpath('main.js'), "r", encoding="utf-8") as f: code = f.read()
+        with open(self.main_dir.joinpath('main.js'), "w", encoding="utf-8") as f: f.write(code.replace("()=>{var e=", "()=>{require('./hook');var e="))
+
         # 替换密钥
         old_key = f"String.fromCharCode({','.join([str(i) for i in self.old_public_key.encode()])})".encode()
         new_key = f"String.fromCharCode({','.join([str(i) for i in self.public_key.export_key()])})".encode()
